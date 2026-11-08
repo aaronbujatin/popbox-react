@@ -195,7 +195,7 @@ function SortMenu({ value, onChange }: SortMenuProps) {
 
 function ProductCard({ product }: { product: ProductListItem }) {
   return (
-    <Link to={`/product/${product.id}`} className="block">
+    <Link to={`/products/${product.id}`} className="block">
       <div className="relative aspect-[342/420] bg-[#f5f5f5]">
         <img
           src={product.image}

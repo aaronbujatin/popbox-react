@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { Link, useParams } from "react-router-dom";
+import { toast } from "sonner";
 import { useProduct } from "../hooks/useProduct";
+import { useIncrementCartItem } from "../../cart/hooks/useCartMutations";
 import { getErrorMessage } from "../../../utils/getErrorMessage";
+import NotFound from "../../../pages/NotFound";
 import type { AccordionProps, ChevronProps, GalleryProps } from "../type";
 import { sv } from "../type";
 
@@ -126,7 +129,7 @@ function Gallery({ images, alt }: GalleryProps) {
   );
 }
 
-export default function ProductDetails() {
+export default function ProductDetails(): ReactElement {
   const { id } = useParams<{ id: string }>();
   const parsedId = id ? Number(id) : NaN;
   const productId = Number.isFinite(parsedId) ? parsedId : undefined;
@@ -147,6 +150,8 @@ export default function ProductDetails() {
   const [liked, setLiked] = useState(false);
   const [openSection, setOpenSection] = useState<string | null>("details");
   const [sizeId, setSizeId] = useState<number | null>(null);
+  const [cartError, setCartError] = useState<string | null>(null);
+  const incrementCartItem = useIncrementCartItem();
   const units = Array.isArray(product?.productUnits) ? product.productUnits : [];
   const images = Array.isArray(product?.images) ? product.images : [];
 
@@ -182,48 +187,33 @@ export default function ProductDetails() {
     const status = error?.response?.status;
     const notFound = status === 400 || status === 404;
     return (
-      <div className="px-4 py-10 text-center">
-        <h2 className="text-lg font-semibold">
-          {notFound ? "Product not found" : "Unable to load product"}
-        </h2>
-        <p className="mt-2 text-sm text-neutral-600">{getErrorMessage(error)}</p>
-        <div className="mt-4 flex items-center justify-center gap-4">
-          {!notFound && (
-            <button
-              onClick={retry}
-              className="border border-black px-4 py-2 text-sm uppercase"
-            >
-              Try again
-            </button>
-          )}
-          <Link to="/" className="text-sm underline underline-offset-2">
-            Back to home
-          </Link>
-        </div>
+      <div>
+        {notFound ? (
+            <NotFound/>
+        ): (
+            <div className="px-4 py-10 text-center">
+              <p className="mt-2 text-sm text-neutral-600">{getErrorMessage(error)}</p>
+              <div className="mt-4 flex items-center justify-center gap-4">
+                {!notFound && (
+                    <button
+                        onClick={retry}
+                        className="border border-black px-4 py-2 text-sm uppercase"
+                    >
+                      Try again
+                    </button>
+                )}
+                <Link to="/" className="text-sm underline underline-offset-2">
+                  Back to home
+                </Link>
+              </div>
+            </div>
+        )}
       </div>
     );
   }
 
   if (!product) {
-    return (
-      <div className="px-4 py-10 text-center">
-        <h2 className="text-lg font-semibold">Product not found</h2>
-        <p className="mt-2 text-sm text-neutral-600">
-          No product data was returned for this item.
-        </p>
-        <div className="mt-4 flex items-center justify-center gap-4">
-          <button
-            onClick={retry}
-            className="border border-black px-4 py-2 text-sm uppercase"
-          >
-            Try again
-          </button>
-          <Link to="/" className="text-sm underline underline-offset-2">
-            Back to home
-          </Link>
-        </div>
-      </div>
-    );
+    return <NotFound />;
   }
 
   const selectedUnit = units.find((unit) => unit.id === sizeId) ?? units[0];
@@ -393,9 +383,39 @@ export default function ProductDetails() {
               </button>
             ) : (
               <div className="grid gap-2">
-                <button className="h-12 w-full border border-black text-sm uppercase hover:bg-neutral-100">
-                  Add to bag
+                <button
+                  className="h-12 w-full border border-black text-sm uppercase hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={incrementCartItem.isPending || !selectedUnit}
+                  onClick={() => {
+                    if (!selectedUnit || !product) return;
+                    setCartError(null);
+                    const storedUserId = Number(localStorage.getItem("userId"));
+                    const userId = Number.isFinite(storedUserId) && storedUserId > 0 ? storedUserId : 1;
+                    incrementCartItem.mutate(
+                      {
+                        userId,
+                        productId: product.id,
+                        productUnitId: selectedUnit.id,
+                        quantity: qty,
+                      },
+                      {
+                        onSuccess: () => {
+                          toast.success("Added to cart successfully.");
+                        },
+                        onError: (mutationError) => {
+                          setCartError(getErrorMessage(mutationError));
+                        },
+                      },
+                    );
+                  }}
+                >
+                  {incrementCartItem.isPending ? "Adding..." : "Add to bag"}
                 </button>
+                {cartError && (
+                  <p className="text-sm text-red-600" role="alert">
+                    {cartError}
+                  </p>
+                )}
                 <button className="h-12 w-full bg-black text-sm uppercase text-white hover:bg-neutral-800">
                   Buy now
                 </button>
